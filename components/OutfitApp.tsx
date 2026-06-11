@@ -10,16 +10,7 @@ import SavedOutfits from './SavedOutfits'
 // ─── Constants ────────────────────────────────────────────────────────────────
 const OCCASIONS = ['Work', 'University', 'Dinner', 'Wedding', 'Casual', 'Travel', 'Gym', 'Party']
 const STYLES    = ['Classy', 'Modest', 'Trendy', 'Minimal', 'Sporty', 'Luxury', 'Streetwear']
-const MODELS    = [
-  { value: 'openai/gpt-oss-120b',                    label: 'GPT OSS 120B' },
-  { value: 'anthropic/claude-opus-4.8-fast',         label: 'Claude Opus 4.8 Fast' },
-  { value: 'openai/gpt-4o-mini',                     label: 'GPT-4o Mini' },
-  { value: 'openai/gpt-4o',                          label: 'GPT-4o' },
-  { value: 'anthropic/claude-3.5-haiku',             label: 'Claude 3.5 Haiku' },
-  { value: 'anthropic/claude-3.5-sonnet',            label: 'Claude 3.5 Sonnet' },
-  { value: 'google/gemini-flash-1.5',                label: 'Gemini Flash 1.5' },
-  { value: 'meta-llama/llama-3.1-8b-instruct:free',  label: 'Llama 3.1 8B (free)' },
-]
+const MODEL = 'anthropic/claude-opus-4.8-fast'
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 function buildPrompt(params: {
@@ -68,7 +59,6 @@ export default function OutfitApp() {
   const [colorInput, setColorInput] = useState('')
   const [weather, setWeather]       = useState('')
   const [notes, setNotes]           = useState('')
-  const [model, setModel]           = useState('openai/gpt-oss-120b')
 
   // App
   const [apiKey, setApiKey]           = useState('')
@@ -191,7 +181,7 @@ export default function OutfitApp() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, apiKey }),
+        body: JSON.stringify({ prompt, model: MODEL, apiKey }),
       })
 
       const data = await res.json() as {
@@ -219,7 +209,7 @@ export default function OutfitApp() {
     } finally {
       setLoading(false)
     }
-  }, [hasEnvKey, apiKey, occasion, style, wardrobe, colors, weather, notes, model])
+  }, [hasEnvKey, apiKey, occasion, style, wardrobe, colors, weather, notes])
 
   // ─── Save / unsave ────────────────────────────────────────────────────────
   const toggleSave = useCallback((outfit: Outfit) => {
@@ -424,21 +414,6 @@ export default function OutfitApp() {
             </div>
 
           </div>{/* /form-grid */}
-
-          {/* Model selector */}
-          <div className="model-row">
-            <span className="model-label">AI Model:</span>
-            <select
-              className="model-select"
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              aria-label="Select AI model"
-            >
-              {MODELS.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </div>
 
           {/* Generate */}
           <div className="gen-wrap">
