@@ -5,42 +5,28 @@ import type { Outfit, SavedOutfit } from '@/lib/types'
 import OutfitCard from './OutfitCard'
 import SkeletonCard from './SkeletonCard'
 import SavedOutfits from './SavedOutfits'
+import ClothingPicker from './ClothingPicker'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const OCCASIONS = [
-  { value: 'Work',       emoji: '💼', label: 'Work'       },
-  { value: 'University', emoji: '🎓', label: 'University' },
-  { value: 'Dinner',     emoji: '🍽️', label: 'Dinner'     },
-  { value: 'Wedding',    emoji: '💍', label: 'Wedding'    },
-  { value: 'Casual',     emoji: '👟', label: 'Casual'     },
-  { value: 'Travel',     emoji: '✈️', label: 'Travel'     },
-  { value: 'Gym',        emoji: '🏋️', label: 'Gym'        },
-  { value: 'Party',      emoji: '🎉', label: 'Party'      },
-]
-
-const STYLES = [
-  { value: 'Classy',      emoji: '👗', label: 'Classy'      },
-  { value: 'Modest',      emoji: '🧕', label: 'Modest'      },
-  { value: 'Trendy',      emoji: '✨', label: 'Trendy'      },
-  { value: 'Minimal',     emoji: '🤍', label: 'Minimal'     },
-  { value: 'Sporty',      emoji: '🏃', label: 'Sporty'      },
-  { value: 'Luxury',      emoji: '💎', label: 'Luxury'      },
-  { value: 'Streetwear',  emoji: '🧢', label: 'Streetwear'  },
-]
-
-const MODEL = 'llama-3.3-70b-versatile'
+const OCCASIONS = ['Work', 'University', 'Dinner', 'Wedding', 'Casual', 'Travel', 'Gym', 'Party']
+const STYLES    = ['Classy', 'Modest', 'Trendy', 'Minimal', 'Sporty', 'Luxury', 'Streetwear']
+const MODEL     = 'llama-3.3-70b-versatile'
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 function buildPrompt(params: {
-  occasion: string; style: string; wardrobe: string
-  colors: string[]; weather: string; notes: string
+  occasion: string; style: string; clothes: string[]
+  customClothes: string; colors: string[]; weather: string; notes: string
 }) {
-  const { occasion, style, wardrobe, colors, weather, notes } = params
+  const { occasion, style, clothes, customClothes, colors, weather, notes } = params
+  const allItems = [
+    ...clothes,
+    ...(customClothes.trim() ? [customClothes.trim()] : []),
+  ]
   return `Create exactly 3 distinct, creative outfit suggestions based on the user's preferences below.
 
 Occasion: ${occasion || 'Not specified'}
 Style: ${style || 'Not specified'}
-Available wardrobe items: ${wardrobe || 'Any items you like'}
+Available wardrobe items: ${allItems.length ? allItems.join(', ') : 'Any items you like'}
 Preferred colors: ${colors.length ? colors.join(', ') : 'No specific preference'}
 Weather / Temperature: ${weather || 'Not specified'}
 Additional notes: ${notes || 'None'}
@@ -63,20 +49,21 @@ Respond with ONLY a JSON object in this exact shape (no markdown, no preamble):
 Rules:
 - Each outfit must be distinct in vibe and pieces.
 - confidenceScore is 70–98 based on how well it fits the brief.
-- If wardrobe items are listed, try to use them; otherwise suggest realistic items.
+- If wardrobe items are listed, build outfits around them; otherwise suggest realistic items.
 - Be specific (e.g. "ivory silk slip dress" not just "dress").`
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function OutfitApp() {
   // Form
-  const [occasion, setOccasion]     = useState('')
-  const [style, setStyle]           = useState('')
-  const [wardrobe, setWardrobe]     = useState('')
-  const [colors, setColors]         = useState<string[]>([])
-  const [colorInput, setColorInput] = useState('')
-  const [weather, setWeather]       = useState('')
-  const [notes, setNotes]           = useState('')
+  const [occasion, setOccasion]           = useState('')
+  const [style, setStyle]                 = useState('')
+  const [selectedClothes, setClothes]     = useState<string[]>([])
+  const [customClothes, setCustomClothes] = useState('')
+  const [colors, setColors]               = useState<string[]>([])
+  const [colorInput, setColorInput]       = useState('')
+  const [weather, setWeather]             = useState('')
+  const [notes, setNotes]                 = useState('')
 
   // App
   const [loading, setLoading]         = useState(false)
@@ -95,16 +82,14 @@ export default function OutfitApp() {
   useEffect(() => {
     const t = (localStorage.getItem('outfitai_theme') ?? 'light') as 'light' | 'dark'
     setTheme(t)
-
     try {
       setSaved(JSON.parse(localStorage.getItem('outfitai_saved') ?? '[]'))
     } catch { /* empty */ }
-
     const p = new URLSearchParams(window.location.search)
     const o = p.get('occasion')
     const s = p.get('style')
-    if (o && OCCASIONS.some(x => x.value === o)) setOccasion(o)
-    if (s && STYLES.some(x => x.value === s))    setStyle(s)
+    if (o && OCCASIONS.includes(o)) setOccasion(o)
+    if (s && STYLES.includes(s))    setStyle(s)
   }, [])
 
   // ─── Theme ────────────────────────────────────────────────────────────────
@@ -159,10 +144,9 @@ export default function OutfitApp() {
     setLoading(true)
     setError('')
     setOutfits([])
-
     setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
 
-    const prompt = buildPrompt({ occasion, style, wardrobe, colors, weather, notes })
+    const prompt = buildPrompt({ occasion, style, clothes: selectedClothes, customClothes, colors, weather, notes })
 
     try {
       const res = await fetch('/api/generate', {
@@ -170,24 +154,19 @@ export default function OutfitApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, model: MODEL }),
       })
-
       const data = await res.json() as {
         choices?: Array<{ message?: { content?: string } }>
         error?: string
       }
-
       if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
-
       const raw = data?.choices?.[0]?.message?.content ?? ''
       if (!raw) throw new Error('Empty response from AI. Try again.')
-
       let parsed: { outfits?: Outfit[] }
       try {
         parsed = JSON.parse(raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim())
       } catch {
         throw new Error('Could not parse AI response. Try regenerating.')
       }
-
       const result = parsed?.outfits ?? []
       if (!result.length) throw new Error('No outfits returned. Adjust your preferences and try again.')
       setOutfits(result)
@@ -196,7 +175,7 @@ export default function OutfitApp() {
     } finally {
       setLoading(false)
     }
-  }, [occasion, style, wardrobe, colors, weather, notes])
+  }, [occasion, style, selectedClothes, customClothes, colors, weather, notes])
 
   // ─── Save / unsave ────────────────────────────────────────────────────────
   const toggleSave = useCallback((outfit: Outfit) => {
@@ -240,7 +219,6 @@ export default function OutfitApp() {
       `💬 Why it works: ${outfit.whyItWorks}`,
       `Match: ${outfit.confidenceScore}%`,
     ].join('\n')
-
     try {
       await navigator.clipboard.writeText(text)
       toast('Outfit copied to clipboard!')
@@ -292,23 +270,16 @@ export default function OutfitApp() {
 
       {/* Main */}
       <main className="main">
-
-        {/* ── Form ── */}
         <section>
           <div className="form-grid">
 
             {/* Occasion */}
             <div className="form-card">
               <div className="field-label">📅 Occasion</div>
-              <div className="opt-grid">
+              <div className="pills">
                 {OCCASIONS.map(o => (
-                  <button
-                    key={o.value}
-                    className={`opt-card${occasion === o.value ? ' on' : ''}`}
-                    onClick={() => handleOccasion(o.value)}
-                  >
-                    <span className="opt-emoji">{o.emoji}</span>
-                    <span className="opt-label">{o.label}</span>
+                  <button key={o} className={`pill${occasion === o ? ' on' : ''}`} onClick={() => handleOccasion(o)}>
+                    {o}
                   </button>
                 ))}
               </div>
@@ -317,31 +288,53 @@ export default function OutfitApp() {
             {/* Style */}
             <div className="form-card">
               <div className="field-label">💫 Your Style</div>
-              <div className="opt-grid">
+              <div className="pills">
                 {STYLES.map(s => (
-                  <button
-                    key={s.value}
-                    className={`opt-card${style === s.value ? ' on' : ''}`}
-                    onClick={() => handleStyle(s.value)}
-                  >
-                    <span className="opt-emoji">{s.emoji}</span>
-                    <span className="opt-label">{s.label}</span>
+                  <button key={s} className={`pill${style === s ? ' on' : ''}`} onClick={() => handleStyle(s)}>
+                    {s}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Wardrobe */}
-            <div className="form-card">
-              <div className="field-label">👗 Your Wardrobe Items</div>
-              <textarea
-                className="f-textarea"
-                value={wardrobe}
-                onChange={e => setWardrobe(e.target.value)}
-                placeholder="e.g. white button-up, black trousers, floral midi dress, light-wash jeans, beige blazer, white sneakers…"
+          </div>{/* /form-grid top row */}
+
+          {/* Wardrobe picker — shown after occasion + style selected */}
+          {(occasion || style) && (
+            <div className="form-card" style={{ marginBottom: '1rem' }}>
+              <div className="field-label">👗 Your Wardrobe — pick what you own</div>
+              <ClothingPicker selected={selectedClothes} onChange={setClothes} />
+
+              {/* Selected items summary */}
+              {selectedClothes.length > 0 && (
+                <div className="cp-selected">
+                  <span className="cp-selected-label">Selected:</span>
+                  {selectedClothes.map(c => (
+                    <span key={c} className="chip">
+                      {c}
+                      <button
+                        className="chip-x"
+                        onClick={() => setClothes(prev => prev.filter(x => x !== c))}
+                        aria-label={`Remove ${c}`}
+                      >×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Custom extras */}
+              <input
+                className="f-input"
+                style={{ marginTop: '1rem' }}
+                type="text"
+                value={customClothes}
+                onChange={e => setCustomClothes(e.target.value)}
+                placeholder="Anything else? e.g. vintage denim jacket, silk scarf…"
               />
             </div>
+          )}
 
+          <div className="form-grid">
             {/* Colors */}
             <div className="form-card">
               <div className="field-label">🎨 Preferred Colors</div>
@@ -380,17 +373,16 @@ export default function OutfitApp() {
             </div>
 
             {/* Notes */}
-            <div className="form-card">
+            <div className="form-card" style={{ gridColumn: '1 / -1' }}>
               <div className="field-label">📝 Notes &amp; Preferences</div>
               <textarea
                 className="f-textarea"
-                style={{ minHeight: '80px' }}
+                style={{ minHeight: '70px' }}
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 placeholder="e.g. comfortable and easy to walk in, avoid heels, need pockets…"
               />
             </div>
-
           </div>
 
           {/* Generate */}
@@ -442,17 +434,14 @@ export default function OutfitApp() {
 
         {/* ── Saved ── */}
         <SavedOutfits outfits={savedOutfits} onDelete={deleteSaved} />
-
       </main>
 
-      {/* Footer */}
       <footer className="footer">
         Built with{' '}
         <a href="https://groq.com" target="_blank" rel="noopener noreferrer">Groq AI</a>
         {' '}· Your wardrobe, elevated ✨
       </footer>
 
-      {/* Toast */}
       <div className={`toast${showToast ? ' show' : ''}`} role="status" aria-live="polite">
         {toastMsg}
       </div>
