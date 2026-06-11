@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Outfit, SavedOutfit } from '@/lib/types'
-import ApiKeyModal from './ApiKeyModal'
 import OutfitCard from './OutfitCard'
 import SkeletonCard from './SkeletonCard'
 import SavedOutfits from './SavedOutfits'
@@ -10,7 +9,7 @@ import SavedOutfits from './SavedOutfits'
 // ─── Constants ────────────────────────────────────────────────────────────────
 const OCCASIONS = ['Work', 'University', 'Dinner', 'Wedding', 'Casual', 'Travel', 'Gym', 'Party']
 const STYLES    = ['Classy', 'Modest', 'Trendy', 'Minimal', 'Sporty', 'Luxury', 'Streetwear']
-const MODEL = 'llama-3.3-70b-versatile'
+const MODEL     = 'llama-3.3-70b-versatile'
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 function buildPrompt(params: {
@@ -61,9 +60,6 @@ export default function OutfitApp() {
   const [notes, setNotes]           = useState('')
 
   // App
-  const [apiKey, setApiKey]           = useState('')
-  const [hasEnvKey, setHasEnvKey]     = useState(false)
-  const [showModal, setShowModal]     = useState(false)
   const [loading, setLoading]         = useState(false)
   const [outfits, setOutfits]         = useState<Outfit[]>([])
   const [showResults, setShowResults] = useState(false)
@@ -73,34 +69,18 @@ export default function OutfitApp() {
   const [toastMsg, setToastMsg]       = useState('')
   const [showToast, setShowToast]     = useState(false)
 
-  const resultsRef  = useRef<HTMLElement>(null)
+  const resultsRef    = useRef<HTMLElement>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ─── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Check if server has env key
-    fetch('/api/key-status')
-      .then(r => r.json())
-      .then((d: { hasEnvKey: boolean }) => {
-        setHasEnvKey(d.hasEnvKey)
-        if (!d.hasEnvKey) {
-          const stored = localStorage.getItem('outfitai_key') ?? ''
-          setApiKey(stored)
-          if (!stored) setShowModal(true)
-        }
-      })
-      .catch(() => {})
-
-    // Theme
     const t = (localStorage.getItem('outfitai_theme') ?? 'light') as 'light' | 'dark'
     setTheme(t)
 
-    // Saved outfits
     try {
       setSaved(JSON.parse(localStorage.getItem('outfitai_saved') ?? '[]'))
     } catch { /* empty */ }
 
-    // URL params
     const p = new URLSearchParams(window.location.search)
     const o = p.get('occasion')
     const s = p.get('style')
@@ -135,13 +115,11 @@ export default function OutfitApp() {
   }, [])
 
   const handleOccasion = useCallback((v: string) => {
-    setOccasion(v)
-    syncURL(v, style)
+    setOccasion(v); syncURL(v, style)
   }, [style, syncURL])
 
   const handleStyle = useCallback((v: string) => {
-    setStyle(v)
-    syncURL(occasion, v)
+    setStyle(v); syncURL(occasion, v)
   }, [occasion, syncURL])
 
   // ─── Colors ───────────────────────────────────────────────────────────────
@@ -156,18 +134,8 @@ export default function OutfitApp() {
     setColors(prev => prev.filter((_, idx) => idx !== i))
   }, [])
 
-  // ─── API key ──────────────────────────────────────────────────────────────
-  const handleSaveKey = useCallback((key: string) => {
-    localStorage.setItem('outfitai_key', key)
-    setApiKey(key)
-    setShowModal(false)
-    toast('API key saved ✨')
-  }, [toast])
-
   // ─── Generate ─────────────────────────────────────────────────────────────
   const generate = useCallback(async () => {
-    if (!hasEnvKey && !apiKey) { setShowModal(true); return }
-
     setShowResults(true)
     setLoading(true)
     setError('')
@@ -181,7 +149,7 @@ export default function OutfitApp() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model: MODEL, apiKey }),
+        body: JSON.stringify({ prompt, model: MODEL }),
       })
 
       const data = await res.json() as {
@@ -209,7 +177,7 @@ export default function OutfitApp() {
     } finally {
       setLoading(false)
     }
-  }, [hasEnvKey, apiKey, occasion, style, wardrobe, colors, weather, notes])
+  }, [occasion, style, wardrobe, colors, weather, notes])
 
   // ─── Save / unsave ────────────────────────────────────────────────────────
   const toggleSave = useCallback((outfit: Outfit) => {
@@ -278,22 +246,11 @@ export default function OutfitApp() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      {/* API Key Modal */}
-      <ApiKeyModal
-        isOpen={showModal}
-        defaultKey={apiKey}
-        onClose={() => setShowModal(false)}
-        onSave={handleSaveKey}
-      />
-
       {/* Header */}
       <header className="header">
         <div className="header-inner">
           <div className="logo">Outfit<span>AI</span></div>
           <div className="header-btns">
-            <button className="icon-btn" onClick={() => setShowModal(true)} title="API Key settings" aria-label="Open API key settings">
-              🔑
-            </button>
             <button className="icon-btn" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle colour theme">
               {theme === 'dark' ? '☀️' : '🌙'}
             </button>
@@ -303,7 +260,7 @@ export default function OutfitApp() {
 
       {/* Hero */}
       <section className="hero">
-        <div className="hero-badge">✨ Powered by Groq — Free & Fast</div>
+        <div className="hero-badge">✨ Powered by Groq — Free &amp; Fast</div>
         <h1 className="hero-title">
           Your <em>Personal</em>
           <br />
@@ -326,11 +283,7 @@ export default function OutfitApp() {
               <div className="field-label">📅 Occasion</div>
               <div className="pills">
                 {OCCASIONS.map(o => (
-                  <button
-                    key={o}
-                    className={`pill${occasion === o ? ' on' : ''}`}
-                    onClick={() => handleOccasion(o)}
-                  >
+                  <button key={o} className={`pill${occasion === o ? ' on' : ''}`} onClick={() => handleOccasion(o)}>
                     {o}
                   </button>
                 ))}
@@ -342,11 +295,7 @@ export default function OutfitApp() {
               <div className="field-label">💫 Your Style</div>
               <div className="pills">
                 {STYLES.map(s => (
-                  <button
-                    key={s}
-                    className={`pill${style === s ? ' on' : ''}`}
-                    onClick={() => handleStyle(s)}
-                  >
+                  <button key={s} className={`pill${style === s ? ' on' : ''}`} onClick={() => handleStyle(s)}>
                     {s}
                   </button>
                 ))}
@@ -413,16 +362,13 @@ export default function OutfitApp() {
               />
             </div>
 
-          </div>{/* /form-grid */}
+          </div>
 
           {/* Generate */}
           <div className="gen-wrap">
             <button className="gen-btn" onClick={generate} disabled={loading} aria-busy={loading}>
               {loading ? (
-                <>
-                  <div className="spinner" aria-hidden="true" />
-                  <span>Styling your look…</span>
-                </>
+                <><div className="spinner" aria-hidden="true" /><span>Styling your look…</span></>
               ) : (
                 <span>✨ Generate My Outfits</span>
               )}
@@ -435,18 +381,11 @@ export default function OutfitApp() {
           <section ref={resultsRef} className="results" aria-live="polite" aria-label="Outfit results">
             <div className="sec-hdr">
               <h2 className="sec-title">Your Outfit Looks</h2>
-              <button className="regen-btn" onClick={generate} disabled={loading}>
-                🔄 Regenerate
-              </button>
+              <button className="regen-btn" onClick={generate} disabled={loading}>🔄 Regenerate</button>
             </div>
-
             <div className="outfits-grid">
               {loading ? (
-                <>
-                  <SkeletonCard />
-                  <SkeletonCard />
-                  <SkeletonCard />
-                </>
+                <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
               ) : error ? (
                 <div className="err-box" role="alert">
                   <div className="err-icon">⚠️</div>
@@ -480,10 +419,8 @@ export default function OutfitApp() {
       {/* Footer */}
       <footer className="footer">
         Built with{' '}
-        <a href="https://groq.com" target="_blank" rel="noopener noreferrer">
-          Groq AI
-        </a>{' '}
-        · Your wardrobe, elevated ✨
+        <a href="https://groq.com" target="_blank" rel="noopener noreferrer">Groq AI</a>
+        {' '}· Your wardrobe, elevated ✨
       </footer>
 
       {/* Toast */}

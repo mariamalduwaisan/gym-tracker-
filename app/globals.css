@@ -51,66 +51,6 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 input, textarea, select { font-family: inherit; }
 a { color: var(--rose); }
 
-/* ─── Modal ──────────────────────────────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.55);
-  backdrop-filter: blur(10px);
-  z-index: 1000;
-  display: flex; align-items: center; justify-content: center; padding: 1rem;
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--ease);
-}
-.modal-overlay.open { opacity: 1; pointer-events: all; }
-
-.modal {
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: 22px;
-  padding: 2.5rem;
-  max-width: 460px; width: 100%;
-  box-shadow: var(--shadow-lg);
-  transform: translateY(24px);
-  transition: transform var(--ease);
-}
-.modal-overlay.open .modal { transform: translateY(0); }
-
-.modal h2 {
-  font-family: var(--font-display), 'Cormorant Garamond', Georgia, serif;
-  font-size: 1.9rem; font-weight: 400;
-  margin-bottom: .4rem; color: var(--text);
-}
-.modal > p { color: var(--text-2); font-size: .88rem; margin-bottom: 1.25rem; }
-
-.modal-inp {
-  width: 100%; padding: .85rem 1rem;
-  border: 1.5px solid var(--border); border-radius: 14px;
-  background: var(--bg-alt); color: var(--text); font-size: .9rem;
-  margin-bottom: .75rem;
-  transition: border-color var(--ease);
-}
-.modal-inp:focus { outline: none; border-color: var(--rose); }
-
-.modal-note { font-size: .78rem; color: var(--text-3); margin-bottom: 1.25rem; }
-.modal-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
-
-/* ─── Shared Buttons ─────────────────────────────────────────────────────────── */
-.btn-rose {
-  background: var(--rose); color: #fff;
-  padding: .7rem 1.5rem; border-radius: 100px;
-  font-size: .88rem; font-weight: 600;
-  transition: background var(--ease), transform var(--ease);
-}
-.btn-rose:hover { background: var(--rose-dk); transform: translateY(-1px); }
-
-.btn-ghost {
-  padding: .7rem 1.25rem; border-radius: 100px;
-  border: 1.5px solid var(--border); color: var(--text-2);
-  font-size: .88rem; font-weight: 500;
-  transition: all var(--ease);
-}
-.btn-ghost:hover { border-color: var(--rose); color: var(--rose); }
-
 /* ─── Header ─────────────────────────────────────────────────────────────────── */
 .header {
   position: sticky; top: 0; z-index: 100;
