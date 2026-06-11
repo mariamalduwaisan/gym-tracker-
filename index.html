@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Outfit Stylist ✨</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
+
+  <!-- Prevent theme flash -->
+  <script>
+    (function () {
+      const t = localStorage.getItem('outfitai_theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <style>
+    /* ─── Tokens ─── */
+    :root {
+      --bg:          #FAF9F6;
+      --bg-alt:      #F2EDE5;
+      --card:        #FFFFFF;
+      --border:      #E5DDD4;
+      --text:        #1C1917;
+      --text-2:      #6B635C;
+      --text-3:      #A39890;
+      --rose:        #C98B95;
+      --rose-lt:     #F0D5D8;
+      --rose-dk:     #9E6470;
+      --taupe:       #AFA198;
+      --radius:      22px;
+      --radius-sm:   14px;
+      --radius-xs:   8px;
+      --shadow:      0 4px 24px rgba(0,0,0,.08);
+      --shadow-lg:   0 10px 48px rgba(0,0,0,.14);
+      --ease:        .3s cubic-bezier(.4,0,.2,1);
+      --ff-display:  'Cormorant Garamond', Georgia, serif;
+      --ff-body:     'DM Sans', system-ui, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg:          #1A1714;
+      --bg-alt:      #221E1A;
+      --card:        #2A2521;
+      --border:      #3A342E;
+      --text:        #EDE8E0;
+      --text-2:      #B0A59A;
+      --text-3:      #706660;
+      --rose:        #C98B95;
+      --rose-lt:     #3D2328;
+      --rose-dk:     #E0A0AA;
+      --taupe:       #8C7E76;
+    }
+
+    /* ─── Reset ─── */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body {
+      font-family: var(--ff-body);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      transition: background var(--ease), color var(--ease);
+      min-height: 100vh;
+    }
+    button { cursor:pointer; border:none; background:none; font-family:inherit; }
+    input, textarea { font-family:inherit; }
+    a { color:var(--rose); }
+
+    /* ─── Modal ─── */
+    .modal-overlay {
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      backdrop-filter:blur(10px);
+      z-index:1000;
+      display:flex; align-items:center; justify-content:center; padding:1rem;
+      opacity:0; pointer-events:none;
+      transition:opacity var(--ease);
+    }
+    .modal-overlay.open { opacity:1; pointer-events:all; }
+    .modal {
+      background:var(--card);
+      border:1.5px solid var(--border);
+      border-radius:var(--radius);
+      padding:2.5rem;
+      max-width:460px; width:100%;
+      box-shadow:var(--shadow-lg);
+      transform:translateY(24px);
+      transition:transform var(--ease);
+    }
+    .modal-overlay.open .modal { transform:translateY(0); }
+    .modal h2 {
+      font-family:var(--ff-display);
+      font-size:1.9rem; font-weight:400;
+      margin-bottom:.4rem;
+    }
+    .modal p { color:var(--text-2); font-size:.88rem; margin-bottom:1.25rem; }
+    .modal-inp {
+      width:100%; padding:.85rem 1rem;
+      border:1.5px solid var(--border); border-radius:var(--radius-sm);
+      background:var(--bg-alt); color:var(--text); font-size:.9rem;
+      margin-bottom:.75rem;
+      transition:border-color var(--ease);
+    }
+    .modal-inp:focus { outline:none; border-color:var(--rose); }
+    .modal-note { font-size:.78rem; color:var(--text-3); margin-bottom:1.25rem; }
+    .modal-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
+
+    /* ─── Shared Buttons ─── */
+    .btn-rose {
+      background:var(--rose); color:#fff;
+      padding:.7rem 1.5rem; border-radius:100px;
+      font-size:.88rem; font-weight:600;
+      transition:background var(--ease), transform var(--ease);
+    }
+    .btn-rose:hover { background:var(--rose-dk); transform:translateY(-1px); }
+    .btn-ghost {
+      padding:.7rem 1.25rem; border-radius:100px;
+      border:1.5px solid var(--border); color:var(--text-2);
+      font-size:.88rem; font-weight:500;
+      transition:all var(--ease);
+    }
+    .btn-ghost:hover { border-color:var(--rose); color:var(--rose); }
+
+    /* ─── Header ─── */
+    header {
+      position:sticky; top:0; z-index:100;
+      border-bottom:1px solid var(--border);
+      background:rgba(250,249,246,.85);
+      backdrop-filter:blur(16px);
+      transition:background var(--ease);
+    }
+    [data-theme="dark"] header { background:rgba(26,23,20,.85); }
+    .header-inner {
+      max-width:1180px; margin:0 auto;
+      padding:1rem 1.5rem;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .logo {
+      font-family:var(--ff-display);
+      font-size:1.55rem; font-weight:500; letter-spacing:.02em;
+      color:var(--text);
+    }
+    .logo span { color:var(--rose); font-style:italic; }
+    .header-btns { display:flex; gap:.5rem; align-items:center; }
+    .icon-btn {
+      width:40px; height:40px; border-radius:50%;
+      background:var(--bg-alt); border:1.5px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      font-size:1rem; color:var(--text-2);
+      transition:all var(--ease);
+    }
+    .icon-btn:hover { border-color:var(--rose); color:var(--rose); transform:scale(1.06); }
+
+    /* ─── Hero ─── */
+    .hero {
+      max-width:1180px; margin:0 auto;
+      padding:4.5rem 1.5rem 2rem;
+      text-align:center;
+    }
+    .hero-badge {
+      display:inline-flex; align-items:center; gap:.45rem;
+      background:var(--rose-lt); color:var(--rose-dk);
+      padding:.38rem 1rem; border-radius:100px;
+      font-size:.72rem; font-weight:600;
+      letter-spacing:.1em; text-transform:uppercase;
+      margin-bottom:1.5rem;
+    }
+    .hero h1 {
+      font-family:var(--ff-display);
+      font-size:clamp(2.4rem,6vw,4.8rem);
+      font-weight:300; line-height:1.12;
+      margin-bottom:1rem;
+    }
+    .hero h1 em { font-style:italic; color:var(--rose); }
+    .hero p { font-size:1rem; color:var(--text-2); max-width:500px; margin:0 auto 2rem; }
+
+    /* ─── Main ─── */
+    main { max-width:1180px; margin:0 auto; padding:0 1.5rem 5rem; }
+
+    /* ─── Form Grid ─── */
+    .form-grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:1rem;
+      margin-bottom:1rem;
+    }
+    .form-card {
+      background:var(--card);
+      border:1.5px solid var(--border);
+      border-radius:var(--radius);
+      padding:1.5rem;
+      transition:border-color var(--ease), box-shadow var(--ease);
+    }
+    .form-card:focus-within {
+      border-color:var(--rose);
+      box-shadow:0 0 0 3px var(--rose-lt);
+    }
+    .form-card.span-2 { grid-column:1/-1; }
+    .field-label {
+      display:flex; align-items:center; gap:.45rem;
+      font-size:.72rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:.1em;
+      color:var(--text-3); margin-bottom:1rem;
+    }
+
+    /* Pills */
+    .pills { display:flex; flex-wrap:wrap; gap:.45rem; }
+    .pill {
+      padding:.45rem .95rem; border-radius:100px;
+      font-size:.82rem; font-weight:500;
+      border:1.5px solid var(--border); color:var(--text-2);
+      background:transparent;
+      transition:all var(--ease);
+    }
+    .pill:hover { border-color:var(--rose); color:var(--rose); }
+    .pill.on {
+      background:var(--rose); border-color:var(--rose); color:#fff;
+      transform:scale(1.03);
+    }
+
+    /* Textarea / Input */
+    .f-textarea, .f-input {
+      width:100%; padding:.72rem 1rem;
+      border:1.5px solid var(--border); border-radius:var(--radius-sm);
+      background:var(--bg); color:var(--text);
+      font-size:.88rem;
+      transition:border-color var(--ease);
+    }
+    .f-textarea { resize:vertical; min-height:100px; }
+    .f-textarea:focus, .f-input:focus { outline:none; border-color:var(--rose); }
+    .f-textarea::placeholder, .f-input::placeholder { color:var(--text-3); }
+
+    /* Color chips */
+    .color-row { display:flex; gap:.5rem; margin-bottom:.75rem; }
+    .color-row .f-input { flex:1; }
+    .add-btn {
+      padding:.72rem 1rem; border-radius:var(--radius-sm);
+      background:var(--rose); color:#fff;
+      font-size:.85rem; font-weight:600;
+      transition:background var(--ease);
+      white-space:nowrap;
+    }
+    .add-btn:hover { background:var(--rose-dk); }
+    .chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+    .chip {
+      display:flex; align-items:center; gap:.3rem;
+      padding:.28rem .7rem; border-radius:100px;
+      background:var(--rose-lt); color:var(--rose-dk);
+      font-size:.78rem; font-weight:500;
+    }
+    .chip-x {
+      opacity:.65; font-size:.95rem; line-height:1;
+      transition:opacity var(--ease);
+      color:var(--rose-dk);
+    }
+    .chip-x:hover { opacity:1; }
+
+    /* Model selector */
+    .model-row {
+      display:flex; align-items:center; gap:.75rem;
+      justify-content:center; margin-bottom:1rem;
+      flex-wrap:wrap;
+    }
+    .model-label { font-size:.8rem; color:var(--text-3); }
+    .model-select {
+      padding:.5rem .9rem; border-radius:var(--radius-sm);
+      border:1.5px solid var(--border); background:var(--card);
+      color:var(--text-2); font-size:.82rem; font-family:inherit;
+      cursor:pointer;
+      transition:border-color var(--ease);
+    }
+    .model-select:focus { outline:none; border-color:var(--rose); }
+
+    /* Generate button */
+    .gen-wrap { text-align:center; margin:1.75rem 0; }
+    .gen-btn {
+      background:linear-gradient(135deg, #C98B95, #A87080);
+      color:#fff; padding:1.05rem 3rem; border-radius:100px;
+      font-size:1rem; font-weight:600; letter-spacing:.03em;
+      box-shadow:0 4px 22px rgba(201,139,149,.4);
+      transition:all var(--ease);
+      display:inline-flex; align-items:center; gap:.55rem;
+    }
+    .gen-btn:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(201,139,149,.52); }
+    .gen-btn:active { transform:translateY(0); }
+    .gen-btn:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+    .spinner {
+      width:18px; height:18px;
+      border:2px solid rgba(255,255,255,.35);
+      border-top-color:#fff;
+      border-radius:50%;
+      animation:spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ─── Results ─── */
+    .results { display:none; animation:up .5s ease; }
+    .results.show { display:block; }
+    @keyframes up { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
+
+    .sec-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;
+    }
+    .sec-title {
+      font-family:var(--ff-display);
+      font-size:2rem; font-weight:400;
+    }
+    .regen-btn {
+      display:flex; align-items:center; gap:.45rem;
+      padding:.55rem 1.2rem; border-radius:100px;
+      border:1.5px solid var(--rose); color:var(--rose);
+      font-size:.82rem; font-weight:600;
+      transition:all var(--ease);
+    }
+    .regen-btn:hover { background:var(--rose); color:#fff; }
+
+    /* Outfit grid */
+    .outfits-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(310px,1fr));
+      gap:1.5rem;
+      margin-bottom:3rem;
+    }
+
+    /* Skeleton */
+    .skel {
+      background:var(--card);
+      border:1.5px solid var(--border);
+      border-radius:var(--radius);
+      padding:1.75rem;
+    }
+    .skel-circle {
+      width:58px; height:58px; border-radius:50%;
+      background:var(--bg-alt);
+      animation:shim 1.4s ease infinite;
+      margin-bottom:1rem;
+    }
+    .skel-line {
+      height:14px; border-radius:6px;
+      background:var(--bg-alt);
+      animation:shim 1.4s ease infinite;
+      margin-bottom:.7rem;
+    }
+    .skel-line.lg { height:22px; }
+    .skel-line.w75 { width:75%; }
+    .skel-line.w55 { width:55%; }
+    .skel-line.w40 { width:40%; }
+    @keyframes shim {
+      0%,100% { opacity:.6; }
+      50% { opacity:1; }
+    }
+
+    /* Outfit card */
+    .ocard {
+      background:var(--card);
+      border:1.5px solid var(--border);
+      border-radius:var(--radius);
+      padding:1.75rem;
+      transition:all var(--ease);
+      animation:up .55s ease both;
+      position:relative;
+      overflow:hidden;
+    }
+    .ocard::before {
+      content:''; position:absolute;
+      top:0; left:0; right:0; height:3px;
+      background:linear-gradient(90deg, var(--rose), var(--taupe));
+      opacity:0;
+      transition:opacity var(--ease);
+    }
+    .ocard:hover { border-color:var(--rose); box-shadow:var(--shadow); transform:translateY(-3px); }
+    .ocard:hover::before { opacity:1; }
+    .ocard:nth-child(1) { animation-delay:.08s; }
+    .ocard:nth-child(2) { animation-delay:.18s; }
+    .ocard:nth-child(3) { animation-delay:.28s; }
+
+    .ocard-top {
+      display:flex; align-items:flex-start;
+      justify-content:space-between; margin-bottom:1.1rem;
+    }
+    .ocard-num {
+      font-size:.68rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.12em;
+      color:var(--rose); margin-bottom:.2rem;
+    }
+    .ocard-name {
+      font-family:var(--ff-display);
+      font-size:1.45rem; font-weight:500; line-height:1.2;
+    }
+    .conf-badge {
+      min-width:58px; height:58px; border-radius:50%;
+      background:var(--rose-lt);
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      flex-shrink:0; margin-left:1rem;
+    }
+    .conf-num {
+      font-family:var(--ff-display);
+      font-size:1.15rem; font-weight:600;
+      color:var(--rose-dk); line-height:1;
+    }
+    .conf-lbl { font-size:.56rem; color:var(--rose-dk); text-transform:uppercase; letter-spacing:.06em; }
+
+    /* palette */
+    .palette { display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:1.1rem; }
+    .pal-chip {
+      padding:.22rem .6rem; border-radius:100px;
+      font-size:.72rem; font-weight:500;
+      background:var(--bg-alt); color:var(--text-2);
+      border:1px solid var(--border);
+    }
+
+    .o-sec { margin-bottom:.9rem; }
+    .o-lbl {
+      font-size:.68rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.09em;
+      color:var(--text-3); margin-bottom:.35rem;
+    }
+    .o-pieces { list-style:none; display:flex; flex-direction:column; gap:.28rem; }
+    .o-pieces li {
+      display:flex; align-items:center; gap:.45rem;
+      font-size:.88rem; color:var(--text-2);
+    }
+    .o-pieces li::before {
+      content:'·'; color:var(--rose);
+      font-size:1.4rem; line-height:1; flex-shrink:0;
+    }
+    .o-text { font-size:.88rem; color:var(--text-2); }
+    .o-why {
+      background:var(--bg-alt); border-left:3px solid var(--rose);
+      border-radius:0 var(--radius-xs) var(--radius-xs) 0;
+      padding:.7rem 1rem;
+      font-size:.83rem; color:var(--text-2); font-style:italic;
+      margin-bottom:1.1rem;
+    }
+    .divider { height:1px; background:var(--border); margin:.9rem 0; }
+
+    /* card actions */
+    .cactions { display:flex; gap:.45rem; flex-wrap:wrap; }
+    .cact {
+      flex:1; min-width:72px;
+      display:flex; align-items:center; justify-content:center; gap:.35rem;
+      padding:.55rem .7rem; border-radius:var(--radius-sm);
+      font-size:.78rem; font-weight:600;
+      border:1.5px solid var(--border); color:var(--text-2);
+      background:transparent;
+      transition:all var(--ease);
+    }
+    .cact:hover { border-color:var(--rose); color:var(--rose); }
+    .cact.is-saved { background:var(--rose-lt); border-color:var(--rose); color:var(--rose-dk); }
+    .cact.is-copied { background:#D4EDD9; border-color:#4CAF50; color:#276A2F; }
+    [data-theme="dark"] .cact.is-copied { background:#1A3020; border-color:#4CAF50; color:#6BCF7A; }
+
+    /* ─── Error ─── */
+    .err-box {
+      grid-column:1/-1;
+      display:flex; align-items:flex-start; gap:1rem;
+      background:#FFF4F4; border:1.5px solid #FFCCCC;
+      border-radius:var(--radius); padding:1.5rem;
+    }
+    [data-theme="dark"] .err-box { background:#2A1818; border-color:#5A2222; }
+    .err-icon { font-size:1.6rem; flex-shrink:0; }
+    .err-title { font-weight:700; color:#CC3333; margin-bottom:.2rem; font-size:.9rem; }
+    .err-msg { color:var(--text-2); font-size:.85rem; }
+
+    /* ─── Saved Section ─── */
+    .saved-sec { margin-top:3rem; }
+    .saved-sub { font-size:.85rem; color:var(--text-3); margin-bottom:1.25rem; }
+    .saved-empty {
+      text-align:center; padding:3rem;
+      background:var(--card); border:1.5px dashed var(--border);
+      border-radius:var(--radius);
+    }
+    .saved-empty-icon { font-size:2.8rem; margin-bottom:.6rem; }
+    .saved-empty-txt { color:var(--text-3); font-size:.88rem; }
+    .saved-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+      gap:1rem;
+    }
+    .scard {
+      background:var(--card); border:1.5px solid var(--border);
+      border-radius:var(--radius-sm); padding:1.2rem;
+      transition:all var(--ease); position:relative;
+    }
+    .scard:hover { border-color:var(--rose); transform:translateY(-2px); box-shadow:var(--shadow); }
+    .scard-name {
+      font-family:var(--ff-display); font-size:1.1rem; font-weight:500;
+      margin-bottom:.2rem; padding-right:1.5rem;
+    }
+    .scard-date { font-size:.73rem; color:var(--text-3); margin-bottom:.55rem; }
+    .scard-tags { display:flex; flex-wrap:wrap; gap:.35rem; }
+    .stag {
+      font-size:.7rem; padding:.18rem .55rem;
+      background:var(--bg-alt); color:var(--text-3);
+      border-radius:100px;
+    }
+    .del-btn {
+      position:absolute; top:.7rem; right:.7rem;
+      width:24px; height:24px; border-radius:50%;
+      background:var(--bg-alt); color:var(--text-3);
+      display:flex; align-items:center; justify-content:center;
+      font-size:.75rem; opacity:0;
+      transition:all var(--ease);
+    }
+    .scard:hover .del-btn { opacity:1; }
+    .del-btn:hover { background:#FFEEEE; color:#CC3333; }
+
+    /* ─── Toast ─── */
+    .toast {
+      position:fixed; bottom:2rem; right:2rem;
+      background:var(--card); border:1.5px solid var(--border);
+      border-radius:var(--radius-sm); padding:.7rem 1.2rem;
+      font-size:.88rem; color:var(--text);
+      box-shadow:var(--shadow-lg); z-index:600;
+      transform:translateY(90px); opacity:0;
+      transition:all var(--ease);
+      pointer-events:none;
+    }
+    .toast.show { transform:translateY(0); opacity:1; }
+
+    /* ─── Footer ─── */
+    footer {
+      border-top:1px solid var(--border);
+      padding:1.75rem 1.5rem;
+      text-align:center; color:var(--text-3); font-size:.78rem;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width:700px) {
+      .form-grid { grid-template-columns:1fr; }
+      .form-card.span-2 { grid-column:1; }
+      .outfits-grid { grid-template-columns:1fr; }
+      .hero { padding:2.5rem 1.25rem 1.25rem; }
+      .gen-btn { width:100%; justify-content:center; }
+      main { padding:0 1.25rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── API Key Modal ─────────────────────────── -->
+<div class="modal-overlay" id="apiModal">
+  <div class="modal">
+    <h2>🔑 Enter your API Key</h2>
+    <p>Paste your OpenRouter API key to enable AI outfit generation. It is stored only in your browser's localStorage and never sent anywhere except OpenRouter.</p>
+    <input class="modal-inp" type="password" id="apiInp" placeholder="sk-or-v1-…" autocomplete="off" />
+    <p class="modal-note">
+      No key yet? <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">Get one free at openrouter.ai →</a>
+    </p>
+    <div class="modal-actions">
+      <button class="btn-rose" onclick="saveKey()">Save &amp; Continue</button>
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Header ────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <div class="logo">Outfit<span>AI</span></div>
+    <div class="header-btns">
+      <button class="icon-btn" onclick="openModal()" title="API Key Settings" aria-label="API settings">🔑</button>
+      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">🌙</button>
+    </div>
+  </div>
+</header>
+
+<!-- ── Hero ──────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-badge">✨ Powered by OpenRouter AI</div>
+  <h1>Your <em>Personal</em><br>AI Outfit Stylist</h1>
+  <p>Tell me your occasion, style, and what's in your wardrobe — I'll craft three perfect looks just for you.</p>
+</section>
+
+<!-- ── Main ──────────────────────────────────── -->
+<main>
+
+  <!-- Form -->
+  <section id="formSec">
+    <div class="form-grid">
+
+      <!-- Occasion -->
+      <div class="form-card">
+        <div class="field-label">📅 Occasion</div>
+        <div class="pills" id="occasionPills">
+          <button class="pill" data-v="Work">Work</button>
+          <button class="pill" data-v="University">University</button>
+          <button class="pill" data-v="Dinner">Dinner</button>
+          <button class="pill" data-v="Wedding">Wedding</button>
+          <button class="pill" data-v="Casual">Casual</button>
+          <button class="pill" data-v="Travel">Travel</button>
+          <button class="pill" data-v="Gym">Gym</button>
+          <button class="pill" data-v="Party">Party</button>
+        </div>
+      </div>
+
+      <!-- Style -->
+      <div class="form-card">
+        <div class="field-label">💫 Your Style</div>
+        <div class="pills" id="stylePills">
+          <button class="pill" data-v="Classy">Classy</button>
+          <button class="pill" data-v="Modest">Modest</button>
+          <button class="pill" data-v="Trendy">Trendy</button>
+          <button class="pill" data-v="Minimal">Minimal</button>
+          <button class="pill" data-v="Sporty">Sporty</button>
+          <button class="pill" data-v="Luxury">Luxury</button>
+          <button class="pill" data-v="Streetwear">Streetwear</button>
+        </div>
+      </div>
+
+      <!-- Wardrobe -->
+      <div class="form-card">
+        <div class="field-label">👗 Your Wardrobe Items</div>
+        <textarea class="f-textarea" id="wardrobeInp"
+          placeholder="e.g. white button-up, black trousers, floral midi dress, light-wash jeans, beige blazer, white sneakers…"></textarea>
+      </div>
+
+      <!-- Colors -->
+      <div class="form-card">
+        <div class="field-label">🎨 Preferred Colors</div>
+        <div class="color-row">
+          <input class="f-input" type="text" id="colorInp" placeholder="e.g. blush pink, ivory…" />
+          <button class="add-btn" id="addColorBtn">+ Add</button>
+        </div>
+        <div class="chips" id="colorChips"></div>
+      </div>
+
+      <!-- Weather -->
+      <div class="form-card">
+        <div class="field-label">🌡️ Weather / Temperature</div>
+        <input class="f-input" type="text" id="weatherInp"
+          placeholder="e.g. 22°C sunny, cold winter day, hot and humid…" />
+      </div>
+
+      <!-- Notes -->
+      <div class="form-card">
+        <div class="field-label">📝 Notes &amp; Preferences</div>
+        <textarea class="f-textarea" id="notesInp" style="min-height:80px;"
+          placeholder="e.g. comfortable and easy to walk in, avoid heels, need pockets…"></textarea>
+      </div>
+
+    </div><!-- /form-grid -->
+
+    <!-- Model picker -->
+    <div class="model-row">
+      <span class="model-label">AI Model:</span>
+      <select class="model-select" id="modelSel">
+        <option value="openai/gpt-4o-mini">GPT-4o Mini (recommended)</option>
+        <option value="openai/gpt-4o">GPT-4o</option>
+        <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
+        <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+        <option value="google/gemini-flash-1.5">Gemini Flash 1.5</option>
+        <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (free)</option>
+      </select>
+    </div>
+
+    <!-- Generate -->
+    <div class="gen-wrap">
+      <button class="gen-btn" id="genBtn" onclick="generate()">
+        <span id="genTxt">✨ Generate My Outfits</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section class="results" id="resultsSec">
+    <div class="sec-hdr">
+      <h2 class="sec-title">Your Outfit Looks</h2>
+      <button class="regen-btn" onclick="generate()">🔄 Regenerate</button>
+    </div>
+    <div class="outfits-grid" id="outfitsGrid"></div>
+  </section>
+
+  <!-- Saved -->
+  <section class="saved-sec" id="savedSec">
+    <h2 class="sec-title">Saved Outfits</h2>
+    <p class="saved-sub">Your favourite looks, stored locally in your browser.</p>
+    <div id="savedCont"></div>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  Built with <a href="https://openrouter.ai" target="_blank" rel="noopener">OpenRouter AI</a> &nbsp;·&nbsp; Your wardrobe, elevated ✨
+</footer>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ── Script ─────────────────────────────────── -->
+<script>
+  /* ─ State ─ */
+  let occ = '', sty = '';
+  let colors = [];
+  let current = [];   // current outfit results
+
+  /* ─ Init ─ */
+  document.addEventListener('DOMContentLoaded', () => {
+    syncThemeIcon();
+    loadFromURL();
+    renderSaved();
+    if (!getKey()) openModal();
+  });
+
+  /* ─── API Key ─── */
+  function getKey() { return localStorage.getItem('oai_key_or'); }
+  function openModal() {
+    const el = document.getElementById('apiModal');
+    el.classList.add('open');
+    const k = getKey();
+    if (k) document.getElementById('apiInp').value = k;
+    setTimeout(() => document.getElementById('apiInp').focus(), 200);
+  }
+  function closeModal() { document.getElementById('apiModal').classList.remove('open'); }
+  function saveKey() {
+    const v = document.getElementById('apiInp').value.trim();
+    if (!v) { toast('Please enter a valid API key.'); return; }
+    localStorage.setItem('oai_key_or', v);
+    closeModal();
+    toast('API key saved ✨');
+  }
+  document.getElementById('apiModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('apiModal')) closeModal();
+  });
+  document.getElementById('apiInp').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveKey();
+  });
+
+  /* ─── Theme ─── */
+  function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('outfitai_theme', next);
+    syncThemeIcon();
+  }
+  function syncThemeIcon() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
+  }
+
+  /* ─── Pills ─── */
+  function setupPills(id, setter) {
+    document.getElementById(id).addEventListener('click', e => {
+      const p = e.target.closest('.pill');
+      if (!p) return;
+      document.querySelectorAll(`#${id} .pill`).forEach(x => x.classList.remove('on'));
+      p.classList.add('on');
+      setter(p.dataset.v);
+      pushURL();
+    });
+  }
+  setupPills('occasionPills', v => { occ = v; });
+  setupPills('stylePills',   v => { sty = v; });
+
+  /* ─── Colors ─── */
+  document.getElementById('addColorBtn').addEventListener('click', addColor);
+  document.getElementById('colorInp').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addColor(); }
+  });
+  document.getElementById('colorChips').addEventListener('click', e => {
+    const x = e.target.closest('.chip-x');
+    if (!x) return;
+    const idx = parseInt(x.dataset.idx);
+    colors.splice(idx, 1);
+    renderChips();
+  });
+  function addColor() {
+    const inp = document.getElementById('colorInp');
+    const v = inp.value.trim();
+    if (!v) return;
+    if (!colors.includes(v)) { colors.push(v); renderChips(); }
+    inp.value = '';
+  }
+  function renderChips() {
+    document.getElementById('colorChips').innerHTML = colors.map((c, i) =>
+      `<div class="chip">${esc(c)}<button class="chip-x" data-idx="${i}" aria-label="Remove ${esc(c)}">×</button></div>`
+    ).join('');
+  }
+
+  /* ─── URL sharing ─── */
+  function pushURL() {
+    const p = new URLSearchParams(window.location.search);
+    if (occ) p.set('occasion', occ); else p.delete('occasion');
+    if (sty) p.set('style', sty);    else p.delete('style');
+    window.history.replaceState({}, '', `${location.pathname}?${p}`);
+  }
+  function loadFromURL() {
+    const p = new URLSearchParams(location.search);
+    const o = p.get('occasion'), s = p.get('style');
+    if (o) { const el = document.querySelector(`#occasionPills .pill[data-v="${CSS.escape(o)}"]`); if (el) { el.classList.add('on'); occ = o; } }
+    if (s) { const el = document.querySelector(`#stylePills .pill[data-v="${CSS.escape(s)}"]`);   if (el) { el.classList.add('on'); sty = s; } }
+  }
+
+  /* ─── Generate ─── */
+  async function generate() {
+    const key = getKey();
+    if (!key) { openModal(); return; }
+
+    const wardrobe = document.getElementById('wardrobeInp').value.trim();
+    const weather  = document.getElementById('weatherInp').value.trim();
+    const notes    = document.getElementById('notesInp').value.trim();
+    const model    = document.getElementById('modelSel').value;
+
+    // Show results section
+    const sec = document.getElementById('resultsSec');
+    sec.classList.add('show');
+    setTimeout(() => sec.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+
+    showSkeletons();
+    setBusy(true);
+
+    const prompt = buildPrompt({ occ, sty, wardrobe, colors, weather, notes });
+
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': location.href,
+          'X-Title': 'AI Outfit Stylist'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You are an expert personal stylist AI. Always respond with valid JSON only — no markdown fences, no extra text.' },
+            { role: 'user',   content: prompt }
+          ],
+          temperature: 0.82,
+          max_tokens: 2800
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const raw  = data?.choices?.[0]?.message?.content;
+      if (!raw) throw new Error('Empty response from AI. Please try again.');
+
+      let parsed;
+      try {
+        parsed = JSON.parse(raw.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim());
+      } catch {
+        throw new Error('Could not parse AI response. Try a different model or regenerate.');
+      }
+
+      const outfits = parsed?.outfits ?? [];
+      if (!outfits.length) throw new Error('AI returned no outfits. Try adjusting your preferences.');
+
+      current = outfits;
+      renderOutfits(outfits);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function buildPrompt({ occ, sty, wardrobe, colors, weather, notes }) {
+    return `Create exactly 3 distinct, creative outfit suggestions based on the user's preferences below.
+
+Occasion: ${occ || 'Not specified'}
+Style: ${sty || 'Not specified'}
+Available wardrobe items: ${wardrobe || 'Any items you like'}
+Preferred colors: ${colors.length ? colors.join(', ') : 'No specific preference'}
+Weather / Temperature: ${weather || 'Not specified'}
+Additional notes: ${notes || 'None'}
+
+Respond with ONLY a JSON object in this exact shape (no markdown, no preamble):
+{
+  "outfits": [
+    {
+      "name": "Creative outfit name",
+      "pieces": ["piece 1", "piece 2", "piece 3", "piece 4"],
+      "colorPalette": ["color 1", "color 2", "color 3"],
+      "shoes": "Specific shoe recommendation with brief styling tip",
+      "accessories": "Bag and accessories with brief styling tip",
+      "whyItWorks": "2–3 sentences explaining why this outfit is perfect for the occasion and style",
+      "confidenceScore": 94
+    }
+  ]
+}
+
+Rules:
+- Each outfit must be distinct in vibe and pieces.
+- confidenceScore is 70–98 based on how well it fits the brief.
+- If wardrobe items are listed, try to use them. If not listed, suggest realistic items.
+- Be specific (e.g. "ivory silk slip dress" not just "dress").`;
+  }
+
+  /* ─── Skeletons ─── */
+  function showSkeletons() {
+    document.getElementById('outfitsGrid').innerHTML = [1,2,3].map(() => `
+      <div class="skel">
+        <div class="skel-circle"></div>
+        <div class="skel-line lg w75"></div>
+        <div class="skel-line w55"></div>
+        <br>
+        <div class="skel-line"></div>
+        <div class="skel-line"></div>
+        <div class="skel-line w75"></div>
+        <br>
+        <div class="skel-line w40"></div>
+        <div class="skel-line"></div>
+      </div>`).join('');
+  }
+
+  function setBusy(on) {
+    const btn = document.getElementById('genBtn');
+    const txt = document.getElementById('genTxt');
+    btn.disabled = on;
+    txt.innerHTML = on
+      ? '<div class="spinner"></div> Styling your look…'
+      : '✨ Generate My Outfits';
+  }
+
+  /* ─── Render outfits ─── */
+  function renderOutfits(outfits) {
+    document.getElementById('outfitsGrid').innerHTML =
+      outfits.map((o, i) => cardHTML(o, i)).join('');
+  }
+
+  function cardHTML(o, i) {
+    const saved   = isSaved(o.name);
+    const pieces  = Array.isArray(o.pieces)      ? o.pieces      : [];
+    const palette = Array.isArray(o.colorPalette) ? o.colorPalette : [];
+    return `
+    <article class="ocard">
+      <div class="ocard-top">
+        <div>
+          <div class="ocard-num">Look ${i + 1}</div>
+          <div class="ocard-name">${esc(o.name)}</div>
+        </div>
+        <div class="conf-badge" title="Confidence score">
+          <span class="conf-num">${o.confidenceScore ?? 90}%</span>
+          <span class="conf-lbl">Match</span>
+        </div>
+      </div>
+
+      ${palette.length ? `<div class="palette">${palette.map(c=>`<span class="pal-chip">${esc(c)}</span>`).join('')}</div>` : ''}
+
+      <div class="o-sec">
+        <div class="o-lbl">👗 Clothing Pieces</div>
+        <ul class="o-pieces">${pieces.map(p=>`<li>${esc(p)}</li>`).join('')}</ul>
+      </div>
+
+      <div class="o-sec">
+        <div class="o-lbl">👠 Shoes</div>
+        <p class="o-text">${esc(o.shoes ?? '')}</p>
+      </div>
+
+      <div class="o-sec">
+        <div class="o-lbl">👜 Bag &amp; Accessories</div>
+        <p class="o-text">${esc(o.accessories ?? '')}</p>
+      </div>
+
+      <div class="o-why">💬 ${esc(o.whyItWorks ?? '')}</div>
+
+      <div class="divider"></div>
+
+      <div class="cactions">
+        <button class="cact ${saved ? 'is-saved' : ''}" data-action="save" data-idx="${i}">
+          ${saved ? '✅ Saved' : '🤍 Save'}
+        </button>
+        <button class="cact" data-action="copy" data-idx="${i}">📋 Copy</button>
+        <button class="cact" data-action="share" data-idx="${i}">🔗 Share</button>
+      </div>
+    </article>`;
+  }
+
+  /* Card action delegation */
+  document.getElementById('outfitsGrid').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx);
+    const act = btn.dataset.action;
+    if (act === 'save')  toggleSave(idx, btn);
+    if (act === 'copy')  copyOutfit(idx, btn);
+    if (act === 'share') shareOutfit();
+  });
+
+  /* ─── Save ─── */
+  function getSaved() { try { return JSON.parse(localStorage.getItem('outfitai_saved') || '[]'); } catch { return []; } }
+  function putSaved(arr) { localStorage.setItem('outfitai_saved', JSON.stringify(arr)); }
+  function isSaved(name) { return getSaved().some(o => o.name === name); }
+
+  function toggleSave(idx, btn) {
+    const outfit = current[idx];
+    if (!outfit) return;
+    const arr = getSaved();
+    const ei = arr.findIndex(o => o.name === outfit.name);
+    if (ei >= 0) {
+      arr.splice(ei, 1);
+      btn.className = 'cact';
+      btn.textContent = '🤍 Save';
+      toast('Outfit removed.');
+    } else {
+      arr.unshift({ ...outfit, savedAt: new Date().toISOString(), occasion: occ, style: sty });
+      btn.className = 'cact is-saved';
+      btn.textContent = '✅ Saved';
+      toast('Outfit saved ✨');
+    }
+    putSaved(arr);
+    renderSaved();
+  }
+
+  function renderSaved() {
+    const arr = getSaved();
+    const cont = document.getElementById('savedCont');
+    if (!arr.length) {
+      cont.innerHTML = `<div class="saved-empty"><div class="saved-empty-icon">🧺</div><p class="saved-empty-txt">No saved outfits yet — generate some looks and hit Save!</p></div>`;
+      return;
+    }
+    cont.innerHTML = `<div class="saved-grid">${arr.map(o => `
+      <div class="scard">
+        <button class="del-btn" data-del="${esc(o.name)}" title="Remove" aria-label="Delete ${esc(o.name)}">×</button>
+        <div class="scard-name">${esc(o.name)}</div>
+        <div class="scard-date">${fmtDate(o.savedAt)}</div>
+        <div class="scard-tags">
+          ${o.occasion ? `<span class="stag">${esc(o.occasion)}</span>` : ''}
+          ${o.style    ? `<span class="stag">${esc(o.style)}</span>`    : ''}
+          ${o.confidenceScore ? `<span class="stag">${o.confidenceScore}% match</span>` : ''}
+        </div>
+      </div>`).join('')}</div>`;
+  }
+
+  document.getElementById('savedCont').addEventListener('click', e => {
+    const btn = e.target.closest('[data-del]');
+    if (!btn) return;
+    const name = btn.dataset.del;
+    putSaved(getSaved().filter(o => o.name !== name));
+    renderSaved();
+    toast('Outfit removed.');
+  });
+
+  /* ─── Copy ─── */
+  function copyOutfit(idx, btn) {
+    const o = current[idx];
+    if (!o) return;
+    const txt =
+      `✨ ${o.name}\n\n` +
+      `🎨 Colors: ${(o.colorPalette||[]).join(', ')}\n\n` +
+      `👗 Pieces:\n${(o.pieces||[]).map(p=>`  · ${p}`).join('\n')}\n\n` +
+      `👠 Shoes: ${o.shoes}\n` +
+      `👜 Accessories: ${o.accessories}\n\n` +
+      `💬 Why it works: ${o.whyItWorks}\n` +
+      `Match: ${o.confidenceScore}%`;
+    navigator.clipboard.writeText(txt).then(() => {
+      btn.textContent = '✅ Copied!';
+      btn.classList.add('is-copied');
+      toast('Outfit copied to clipboard!');
+      setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('is-copied'); }, 2200);
+    }).catch(() => toast('Copy failed — try again.'));
+  }
+
+  /* ─── Share ─── */
+  function shareOutfit() {
+    const url = new URL(location.href);
+    if (occ) url.searchParams.set('occasion', occ);
+    if (sty) url.searchParams.set('style', sty);
+    navigator.clipboard.writeText(url.toString()).then(() => toast('Share link copied 🔗')).catch(() => toast('Could not copy link.'));
+  }
+
+  /* ─── Error ─── */
+  function showError(msg) {
+    document.getElementById('outfitsGrid').innerHTML = `
+      <div class="err-box">
+        <div class="err-icon">⚠️</div>
+        <div>
+          <div class="err-title">Something went wrong</div>
+          <div class="err-msg">${esc(msg)}</div>
+        </div>
+      </div>`;
+  }
+
+  /* ─── Toast ─── */
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+  /* ─── Utils ─── */
+  function esc(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;');
+  }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+    catch { return ''; }
+  }
+</script>
+</body>
+</html>
