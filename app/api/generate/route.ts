@@ -10,22 +10,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Server-side env var takes priority over client-supplied key
-    const key = process.env.OPENROUTER_API_KEY || apiKey
+    const key = process.env.GROQ_API_KEY || apiKey
 
     if (!key) {
       return NextResponse.json(
-        { error: 'No API key provided. Set OPENROUTER_API_KEY in .env.local or enter your key in the app.' },
+        { error: 'No API key provided. Set GROQ_API_KEY in .env.local or enter your key in the app.' },
         { status: 401 },
       )
     }
 
-    const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? req.headers.get('origin') ?? 'https://outfitai.vercel.app',
-        'X-Title': 'AI Outfit Stylist',
       },
       body: JSON.stringify({
         model,
@@ -45,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!upstream.ok) {
       const err = await upstream.json().catch(() => ({})) as { error?: { message?: string } }
       return NextResponse.json(
-        { error: err?.error?.message ?? `OpenRouter error ${upstream.status}` },
+        { error: err?.error?.message ?? `Groq error ${upstream.status}` },
         { status: upstream.status },
       )
     }

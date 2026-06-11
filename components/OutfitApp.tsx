@@ -10,7 +10,7 @@ import SavedOutfits from './SavedOutfits'
 // ─── Constants ────────────────────────────────────────────────────────────────
 const OCCASIONS = ['Work', 'University', 'Dinner', 'Wedding', 'Casual', 'Travel', 'Gym', 'Party']
 const STYLES    = ['Classy', 'Modest', 'Trendy', 'Minimal', 'Sporty', 'Luxury', 'Streetwear']
-const MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+const MODEL = 'llama-3.3-70b-versatile'
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 function buildPrompt(params: {
@@ -303,7 +303,7 @@ export default function OutfitApp() {
 
       {/* Hero */}
       <section className="hero">
-        <div className="hero-badge">✨ Powered by OpenRouter AI</div>
+        <div className="hero-badge">✨ Powered by Groq — Free & Fast</div>
         <h1 className="hero-title">
           Your <em>Personal</em>
           <br />
@@ -480,8 +480,8 @@ export default function OutfitApp() {
       {/* Footer */}
       <footer className="footer">
         Built with{' '}
-        <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer">
-          OpenRouter AI
+        <a href="https://groq.com" target="_blank" rel="noopener noreferrer">
+          Groq AI
         </a>{' '}
         · Your wardrobe, elevated ✨
       </footer>
