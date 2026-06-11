@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime    = 'nodejs'
+export const maxDuration = 30
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: prompt },
         ],
         temperature: 0.82,
-        max_tokens: 2800,
+        max_tokens: 1500,
       }),
     })
 
