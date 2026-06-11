@@ -58,9 +58,6 @@ export default function OutfitApp() {
   const [colorInput, setColorInput] = useState('')
   const [weather, setWeather]     = useState('')
   const [notes, setNotes]         = useState('')
-  const [apiKey, setApiKey]       = useState('')
-  const [keySaved, setKeySaved]   = useState(false)
-
   // App
   const [loading, setLoading]         = useState(false)
   const [outfits, setOutfits]         = useState<Outfit[]>([])
@@ -81,8 +78,6 @@ export default function OutfitApp() {
     try {
       setSaved(JSON.parse(localStorage.getItem('outfitai_saved') ?? '[]'))
     } catch { /* empty */ }
-    const storedKey = localStorage.getItem('outfitai_key') ?? ''
-    if (storedKey) { setApiKey(storedKey); setKeySaved(true) }
     const p = new URLSearchParams(window.location.search)
     const o = p.get('occasion')
     const s = p.get('style')
@@ -124,22 +119,6 @@ export default function OutfitApp() {
     setStyle(v); syncURL(occasion, v)
   }, [occasion, syncURL])
 
-  // ─── API Key ──────────────────────────────────────────────────────────────
-  const saveKey = useCallback(() => {
-    const k = apiKey.trim()
-    if (!k) return
-    localStorage.setItem('outfitai_key', k)
-    setKeySaved(true)
-    toast('API key saved ✓')
-  }, [apiKey, toast])
-
-  const clearKey = useCallback(() => {
-    localStorage.removeItem('outfitai_key')
-    setApiKey('')
-    setKeySaved(false)
-    toast('API key cleared.')
-  }, [toast])
-
   // ─── Colors ───────────────────────────────────────────────────────────────
   const addColor = useCallback(() => {
     const v = colorInput.trim()
@@ -166,7 +145,7 @@ export default function OutfitApp() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model: MODEL, apiKey: apiKey.trim() || undefined }),
+        body: JSON.stringify({ prompt, model: MODEL }),
       })
       const data = await res.json() as {
         choices?: Array<{ message?: { content?: string } }>
@@ -189,7 +168,7 @@ export default function OutfitApp() {
     } finally {
       setLoading(false)
     }
-  }, [occasion, style, wardrobe, colors, weather, notes, apiKey])
+  }, [occasion, style, wardrobe, colors, weather, notes])
 
   // ─── Save / unsave ────────────────────────────────────────────────────────
   const toggleSave = useCallback((outfit: Outfit) => {
@@ -286,35 +265,6 @@ export default function OutfitApp() {
       <main className="main">
         <section>
 
-          {/* ── API Key ── */}
-          <div className="form-card" style={{ marginBottom: '1rem' }}>
-            <div className="field-label">🔑 Groq API Key</div>
-            <p className="key-hint">
-              Free key at{' '}
-              <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">
-                console.groq.com/keys
-              </a>
-              {' '}— saved only in your browser.
-            </p>
-            <div className="key-row">
-              <input
-                className="f-input"
-                type="password"
-                value={apiKey}
-                onChange={e => { setApiKey(e.target.value); setKeySaved(false) }}
-                onKeyDown={e => { if (e.key === 'Enter') saveKey() }}
-                placeholder="gsk_…"
-                aria-label="Groq API key"
-                autoComplete="off"
-              />
-              {keySaved
-                ? <button className="key-btn key-btn-clear" onClick={clearKey}>Clear</button>
-                : <button className="key-btn" onClick={saveKey} disabled={!apiKey.trim()}>Save</button>
-              }
-            </div>
-            {keySaved && <div className="key-ok">✓ Key saved</div>}
-          </div>
-
           <div className="form-grid">
 
             {/* Occasion */}
@@ -410,9 +360,8 @@ export default function OutfitApp() {
             <button
               className="gen-btn"
               onClick={generate}
-              disabled={loading || !apiKey.trim()}
+              disabled={loading}
               aria-busy={loading}
-              title={!apiKey.trim() ? 'Enter your Groq API key above first' : undefined}
             >
               {loading ? (
                 <><div className="spinner" aria-hidden="true" /><span>Styling your look…</span></>
@@ -420,9 +369,6 @@ export default function OutfitApp() {
                 <span>✨ Generate My Outfits</span>
               )}
             </button>
-            {!apiKey.trim() && (
-              <p className="gen-hint">Enter your free Groq API key above to get started</p>
-            )}
           </div>
         </section>
 
