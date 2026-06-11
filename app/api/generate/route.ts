@@ -1,40 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime    = 'nodejs'
+export const runtime     = 'nodejs'
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { prompt, model, apiKey } = body as {
-      prompt: string
-      model: string
-      apiKey?: string
-    }
+    const { prompt, model } = body as { prompt: string; model: string }
 
-    // Server-side env var takes priority over client-supplied key
-    const key = process.env.GROQ_API_KEY || apiKey
-
+    const key = process.env.OPENROUTER_API_KEY
     if (!key) {
       return NextResponse.json(
-        { error: 'No API key provided. Set GROQ_API_KEY in .env.local or enter your key in the app.' },
+        { error: 'No API key configured. Add OPENROUTER_API_KEY to .env.local' },
         { status: 401 },
       )
     }
 
-    const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+        'X-Title': 'OutfitAI',
       },
       body: JSON.stringify({
         model,
         messages: [
           {
             role: 'system',
-            content:
-              'You are an expert personal stylist AI. Always respond with valid JSON only — no markdown fences, no extra text.',
+            content: 'You are an expert personal stylist AI. Always respond with valid JSON only — no markdown fences, no extra text.',
           },
           { role: 'user', content: prompt },
         ],
@@ -46,7 +41,7 @@ export async function POST(req: NextRequest) {
     if (!upstream.ok) {
       const err = await upstream.json().catch(() => ({})) as { error?: { message?: string } }
       return NextResponse.json(
-        { error: err?.error?.message ?? `Groq error ${upstream.status}` },
+        { error: err?.error?.message ?? `OpenRouter error ${upstream.status}` },
         { status: upstream.status },
       )
     }
