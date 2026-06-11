@@ -10,7 +10,7 @@ import SavedOutfits from './SavedOutfits'
 // ─── Constants ────────────────────────────────────────────────────────────────
 const OCCASIONS = ['Work', 'University', 'Dinner', 'Wedding', 'Casual', 'Travel', 'Gym', 'Party']
 const STYLES    = ['Classy', 'Modest', 'Trendy', 'Minimal', 'Sporty', 'Luxury', 'Streetwear']
-const MODEL = 'anthropic/claude-opus-4.8-fast'
+const MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 function buildPrompt(params: {
