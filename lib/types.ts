@@ -1,15 +1,15 @@
-export interface Outfit {
-  name: string
-  pieces: string[]
-  colorPalette: string[]
-  shoes: string
-  accessories: string
-  whyItWorks: string
-  confidenceScore: number
+export interface DailyLog {
+  id: string
+  date: string
+  workout_name: string
+  calories_burned: number
+  notes: string | null
+  created_at: string
 }
 
-export interface SavedOutfit extends Outfit {
-  savedAt: string
-  occasion: string
-  style: string
+export interface WeightLog {
+  id: string
+  date: string
+  weight_kg: number
+  created_at: string
 }
