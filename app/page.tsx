@@ -1,272 +1,348 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { DailyLog, WeightLog } from '@/lib/types'
-import WatchFace from '@/components/WatchFace'
-import WeightGraph from '@/components/WeightGraph'
-import LogModal from '@/components/LogModal'
-import WeightModal from '@/components/WeightModal'
+import { useEffect, useState, useCallback } from 'react'
+import { Workout, ProgressMetric, Priority, Status } from '@/lib/types'
+import ActivityRings     from '@/components/ActivityRings'
+import NotificationBanner from '@/components/NotificationBanner'
+import WorkoutCard       from '@/components/WorkoutCard'
+import AddWorkoutModal   from '@/components/AddWorkoutModal'
+import LogExerciseModal  from '@/components/LogExerciseModal'
+import ProgressTab       from '@/components/ProgressTab'
+import Nav               from '@/components/Nav'
 
-export default function Dashboard() {
-  const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([])
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showLog, setShowLog] = useState(false)
-  const [showWeight, setShowWeight] = useState(false)
+type Tab            = 'dashboard' | 'workouts' | 'progress'
+type PriorityFilter = 'all' | Priority
+type StatusFilter   = 'all' | Status
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/daily-logs').then(r => r.json()),
-      fetch('/api/weight-logs').then(r => r.json()),
-    ]).then(([d, w]) => {
-      setDailyLogs(d)
-      setWeightLogs(w)
-      setLoading(false)
-    })
+const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+
+const PC: Record<string, string> = {
+  all: '#636366', urgent: '#FF375F', high: '#FF9F0A', medium: '#30D158', low: '#636366',
+}
+const SC: Record<string, string> = {
+  all: '#636366', pending: '#636366', in_progress: '#FF9F0A', completed: '#30D158',
+}
+
+export default function App() {
+  const [tab,            setTab]           = useState<Tab>('dashboard')
+  const [workouts,       setWorkouts]      = useState<Workout[]>([])
+  const [metrics,        setMetrics]       = useState<ProgressMetric[]>([])
+  const [loading,        setLoading]       = useState(true)
+  const [priorityFilter, setPriorityFilter]= useState<PriorityFilter>('all')
+  const [statusFilter,   setStatusFilter]  = useState<StatusFilter>('all')
+  const [showAddModal,   setShowAddModal]  = useState(false)
+  const [logWorkout,     setLogWorkout]    = useState<Workout | null>(null)
+
+  const load = useCallback(async () => {
+    const [wRes, mRes] = await Promise.all([
+      fetch('/api/workouts'),
+      fetch('/api/progress'),
+    ])
+    const [ws, ms] = await Promise.all([wRes.json(), mRes.json()])
+    setWorkouts(Array.isArray(ws) ? ws : [])
+    setMetrics(Array.isArray(ms) ? ms : [])
+    setLoading(false)
   }, [])
 
-  // ── computed values ──────────────────────────────────────────────
-  const CAL_GOAL  = 300
-  const DAY_GOAL  = 4
-  const today     = new Date().toISOString().split('T')[0]
-  const todayLog  = dailyLogs.find(l => l.date === today)
+  useEffect(() => { load() }, [load])
 
-  // calories burned today
-  const todayCalories = todayLog?.calories_burned ?? 0
+  // ── Ring computations ─────────────────────────────────────────────
+  const today         = new Date().toISOString().split('T')[0]
+  const todayWorkouts = workouts.filter(w => w.scheduled_date === today)
+  const completedToday= todayWorkouts.filter(w => w.status === 'completed').length
+  const moveRing      = todayWorkouts.length > 0 ? completedToday / todayWorkouts.length : 0
 
-  // workouts done this week (Mon–Sun)
-  const weekStart = new Date()
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (weekStart.getDay() === 0 ? -6 : 1))
-  weekStart.setHours(0,0,0,0)
-  const daysThisWeek = dailyLogs.filter(l => new Date(l.date) >= weekStart).length
+  const totalCompleted = workouts.filter(w => w.status === 'completed').length
+  const exerciseRing   = workouts.length > 0 ? Math.min(totalCompleted / workouts.length, 1) : 0
 
-  // weight lost from first entry
-  const firstWeight  = weightLogs[0]?.weight_kg   ?? 0
-  const latestWeight = weightLogs[weightLogs.length - 1]?.weight_kg ?? 0
-  const weightLost   = firstWeight > 0 ? Math.max(0, parseFloat((firstWeight - latestWeight).toFixed(1))) : 0
+  const sortedMetrics  = [...metrics].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at))
+  const firstMetric    = sortedMetrics[0]
+  const latestMetric   = sortedMetrics[sortedMetrics.length - 1]
+  const weightLost     = (firstMetric?.weight_kg && latestMetric?.weight_kg)
+    ? Math.max(0, firstMetric.weight_kg - latestMetric.weight_kg)
+    : 0
+  const standRing      = Math.min(weightLost / 10, 1)
 
-  // recent 7 logs for the history list
-  const recentLogs = dailyLogs.slice(0, 7)
+  // ── Notifications ─────────────────────────────────────────────────
+  const urgentPending  = workouts.filter(w =>
+    (w.priority === 'urgent' || w.priority === 'high') && w.status !== 'completed'
+  )
+  const urgentCount    = workouts.filter(w => w.priority === 'urgent' && w.status !== 'completed').length
 
-  // ── handlers ──────────────────────────────────────────────────────
-  function onLogged(log: DailyLog) {
-    setDailyLogs(prev => {
-      const filtered = prev.filter(l => l.date !== log.date)
-      return [log, ...filtered].sort((a, b) => b.date.localeCompare(a.date))
-    })
+  // ── Filtered list ─────────────────────────────────────────────────
+  const filtered = workouts
+    .filter(w => priorityFilter === 'all' || w.priority === priorityFilter)
+    .filter(w => statusFilter   === 'all' || w.status   === statusFilter)
+    .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
+
+  function updateWorkout(updated: Workout) {
+    setWorkouts(prev => prev.map(w => w.id === updated.id ? updated : w))
+  }
+  function deleteWorkout(id: string) {
+    setWorkouts(prev => prev.filter(w => w.id !== id))
   }
 
-  function onWeightLogged(log: WeightLog) {
-    setWeightLogs(prev => {
-      const filtered = prev.filter(l => l.date !== log.date)
-      return [...filtered, log].sort((a, b) => a.date.localeCompare(b.date))
-    })
-  }
+  // ── Shared filter chips ────────────────────────────────────────────
+  const PRIORITIES: PriorityFilter[] = ['all', 'urgent', 'high', 'medium', 'low']
+  const STATUSES:   StatusFilter[]   = ['all', 'pending', 'in_progress', 'completed']
 
-  async function deleteLog(id: string) {
-    await fetch(`/api/daily-logs?id=${id}`, { method: 'DELETE' })
-    setDailyLogs(prev => prev.filter(l => l.id !== id))
-  }
-
-  function fmtDate(dateStr: string) {
-    const d = new Date(dateStr + 'T00:00:00')
-    if (dateStr === today) return 'Today'
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
-    if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday'
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  function chip(
+    value: string,
+    active: string,
+    color: string,
+    onClick: () => void,
+    label: string
+  ) {
+    const isActive = value === active
+    return (
+      <button
+        key={value}
+        onClick={onClick}
+        style={{
+          padding: '8px 16px', borderRadius: 100, border: 'none',
+          background: isActive ? `${color}22` : '#1c1c1e',
+          color:      isActive ? color         : '#636366',
+          fontSize: 12, fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '.05em',
+          outline: isActive ? `1.5px solid ${color}55` : 'none',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+      >
+        {label}
+      </button>
+    )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#000', paddingBottom: 24 }}>
+    <div style={{ minHeight: '100vh', background: '#000', paddingBottom: 88 }}>
 
-      {/* ── App header ────────────────────────────────────────────── */}
-      <header style={{
-        padding: '20px 20px 0',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-      }}>
+      {/* ── Header ───────────────────────────────────────────────── */}
+      <header style={{ padding: '28px 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <p style={{ color: '#636366', fontSize: 11, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+          <p style={{ color: '#3a3a3c', fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' }}>
             Your Journey
           </p>
-          <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, lineHeight: 1.2, marginTop: 2 }}>
+          <h1 style={{ color: '#fff', fontSize: 26, fontWeight: 800, lineHeight: 1.15, marginTop: 3 }}>
             Transformation<br />Journey
           </h1>
         </div>
-        {todayLog ? (
+        {urgentPending.length > 0 && (
           <div style={{
-            padding: '6px 14px', borderRadius: 100,
-            background: 'rgba(165,240,68,.15)', border: '1px solid rgba(165,240,68,.3)',
-            color: '#A5F044', fontSize: 12, fontWeight: 700,
+            padding: '7px 14px', borderRadius: 100,
+            background: 'rgba(255,55,95,.14)',
+            border: '1px solid rgba(255,55,95,.28)',
+            color: '#FF375F', fontSize: 12, fontWeight: 700,
             display: 'flex', alignItems: 'center', gap: 6,
+            marginTop: 6,
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#A5F044', display: 'inline-block' }} />
-            Done today
-          </div>
-        ) : (
-          <div style={{
-            padding: '6px 14px', borderRadius: 100,
-            background: 'rgba(255,159,10,.12)', border: '1px solid rgba(255,159,10,.25)',
-            color: '#FF9F0A', fontSize: 12, fontWeight: 700,
-          }}>
-            Log workout
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%', background: '#FF375F',
+              display: 'inline-block',
+              animation: 'pulse-dot 1.6s ease infinite',
+            }} />
+            {urgentPending.length} urgent
           </div>
         )}
       </header>
 
-      {/* ── Apple Watch illustration ───────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '28px 0 12px' }}>
-        {loading ? (
-          <div style={{
-            width: 200, height: 360,
-            background: '#1c1c1e', borderRadius: 60,
-            animation: 'shim 1.4s ease infinite',
-          }} />
-        ) : (
-          <WatchFace
-            calories={todayCalories}
-            calGoal={CAL_GOAL}
-            days={daysThisWeek}
-            dayGoal={DAY_GOAL}
-            weightLost={weightLost}
-            weightGoal={5}
-          />
-        )}
-      </div>
-
-      {/* ── Ring legend ────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', justifyContent: 'center', gap: 20,
-        padding: '0 20px 20px',
-      }}>
-        {[
-          { color: '#FF375F', label: 'Move',     sub: `${todayCalories} / ${CAL_GOAL} kcal` },
-          { color: '#A5F044', label: 'Exercise', sub: `${daysThisWeek} / ${DAY_GOAL} days` },
-          { color: '#00D9FF', label: 'Progress', sub: `${weightLost} kg lost` },
-        ].map(r => (
-          <div key={r.label} style={{ textAlign: 'center' }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color, margin: '0 auto 4px' }} />
-            <p style={{ color: r.color, fontSize: 10, fontWeight: 700 }}>{r.label}</p>
-            <p style={{ color: '#636366', fontSize: 10, marginTop: 1 }}>{r.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Action buttons ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 10, padding: '0 20px 24px' }}>
-        <button
-          onClick={() => setShowLog(true)}
-          style={{
-            flex: 1, padding: '14px 0', borderRadius: 16,
-            background: todayLog ? '#2c2c2e' : '#A5F044',
-            color: todayLog ? '#8e8e93' : '#000',
-            fontWeight: 700, fontSize: 15, border: 'none',
-          }}
-        >
-          {todayLog ? `✓ ${todayLog.calories_burned} kcal logged` : '+ Log Today\'s Workout'}
-        </button>
-        <button
-          onClick={() => setShowWeight(true)}
-          style={{
-            width: 52, height: 52, borderRadius: 14,
-            background: '#2c2c2e', color: '#00D9FF',
-            fontSize: 22, border: 'none',
-          }}
-        >
-          ⚖️
-        </button>
-      </div>
-
-      {/* ── Weight graph ───────────────────────────────────────────── */}
-      {weightLogs.length >= 2 && (
-        <div style={{
-          margin: '0 16px 20px',
-          background: '#1c1c1e', border: '1px solid #2c2c2e',
-          borderRadius: 20, padding: '18px 16px 12px',
-        }}>
-          <WeightGraph logs={weightLogs} />
+      {/* ── Loading skeleton ─────────────────────────────────────── */}
+      {loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+          <div className="spinner" />
         </div>
       )}
 
-      {/* ── 7-day history ──────────────────────────────────────────── */}
-      <div style={{ padding: '0 16px' }}>
-        <p style={{
-          color: '#8e8e93', fontSize: 12, fontWeight: 600,
-          letterSpacing: '.06em', textTransform: 'uppercase',
-          marginBottom: 10,
-        }}>
-          Recent Workouts
-        </p>
+      {/* ══════════════ DASHBOARD TAB ══════════════ */}
+      {!loading && tab === 'dashboard' && (
+        <>
+          {/* Notifications */}
+          <NotificationBanner workouts={urgentPending} />
 
-        {recentLogs.length === 0 ? (
-          <div style={{
-            background: '#1c1c1e', borderRadius: 16,
-            padding: '28px', textAlign: 'center',
-          }}>
-            <p style={{ fontSize: 32, marginBottom: 8 }}>🏋️</p>
-            <p style={{ color: '#636366', fontSize: 14 }}>No workouts logged yet.</p>
-            <p style={{ color: '#636366', fontSize: 13, marginTop: 4 }}>Tap the button above to start your journey.</p>
+          {/* Activity rings */}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 4px' }}>
+            <ActivityRings move={moveRing} exercise={exerciseRing} stand={standRing} size={224} />
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, borderRadius: 16, overflow: 'hidden' }}>
-            {recentLogs.map((log, i) => (
-              <div
-                key={log.id}
-                style={{
-                  background: '#1c1c1e',
-                  padding: '14px 16px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  borderBottom: i < recentLogs.length - 1 ? '1px solid #2c2c2e' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {/* Day dot */}
-                  <div style={{
-                    width: 36, height: 36, borderRadius: '50%',
-                    background: log.date === today ? 'rgba(165,240,68,.15)' : '#2c2c2e',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    border: log.date === today ? '1.5px solid #A5F044' : '1px solid #3a3a3c',
-                  }}>
-                    <span style={{ color: log.date === today ? '#A5F044' : '#8e8e93', fontSize: 9, fontWeight: 700 }}>
-                      {new Date(log.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
-                    </span>
-                    <span style={{ color: log.date === today ? '#A5F044' : '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>
-                      {new Date(log.date + 'T00:00:00').getDate()}
-                    </span>
-                  </div>
 
-                  <div>
-                    <p style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{log.workout_name}</p>
-                    <p style={{ color: '#636366', fontSize: 12, marginTop: 1 }}>{fmtDate(log.date)}</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ color: '#FF375F', fontSize: 15, fontWeight: 700 }}>{log.calories_burned}</p>
-                    <p style={{ color: '#636366', fontSize: 10 }}>kcal</p>
-                  </div>
-                  <button
-                    onClick={() => deleteLog(log.id)}
-                    style={{
-                      width: 28, height: 28, borderRadius: '50%',
-                      background: 'rgba(255,55,95,.1)', color: '#FF375F',
-                      fontSize: 16, border: 'none',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
+          {/* Ring legend */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 28, padding: '4px 20px 20px' }}>
+            {[
+              { color: '#FF375F', label: 'Move',     sub: `${completedToday}/${todayWorkouts.length} today` },
+              { color: '#A5F044', label: 'Exercise',  sub: `${totalCompleted} completed` },
+              { color: '#00D9FF', label: 'Stand',     sub: `${weightLost.toFixed(1)} kg lost` },
+            ].map(r => (
+              <div key={r.label} style={{ textAlign: 'center' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color, boxShadow: `0 0 7px ${r.color}`, margin: '0 auto 4px' }} />
+                <p style={{ color: r.color, fontSize: 11, fontWeight: 700 }}>{r.label}</p>
+                <p style={{ color: '#636366', fontSize: 10, marginTop: 1 }}>{r.sub}</p>
               </div>
             ))}
           </div>
-        )}
-      </div>
 
-      {/* ── Modals ─────────────────────────────────────────────────── */}
-      {showLog    && <LogModal    onClose={() => setShowLog(false)}    onLogged={onLogged}       existingLog={todayLog} />}
-      {showWeight && <WeightModal onClose={() => setShowWeight(false)} onLogged={onWeightLogged} />}
+          {/* Stats row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, padding: '0 16px', marginBottom: 24 }}>
+            {[
+              { label: 'Total',     value: workouts.length,                                              color: '#fff'     },
+              { label: 'Done',      value: totalCompleted,                                               color: '#30D158'  },
+              { label: 'Urgent',    value: urgentCount,                                                  color: '#FF375F'  },
+            ].map(s => (
+              <div key={s.label} style={{ background: '#1c1c1e', borderRadius: 18, padding: '16px 12px', textAlign: 'center' }}>
+                <p style={{ color: s.color, fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{s.value}</p>
+                <p style={{ color: '#636366', fontSize: 10, marginTop: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                  {s.label}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Today's workouts */}
+          <div style={{ padding: '0 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ color: '#8e8e93', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                Today&apos;s Workouts
+              </p>
+              <button
+                onClick={() => setTab('workouts')}
+                style={{ color: '#00D9FF', fontSize: 13, fontWeight: 600, background: 'none', border: 'none' }}
+              >
+                See all →
+              </button>
+            </div>
+
+            {todayWorkouts.length === 0 ? (
+              <div style={{ background: '#1c1c1e', borderRadius: 20, padding: '32px', textAlign: 'center' }}>
+                <p style={{ fontSize: 40, marginBottom: 10 }}>⌚</p>
+                <p style={{ color: '#636366', fontSize: 14 }}>No workouts scheduled for today.</p>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  style={{
+                    marginTop: 16, padding: '10px 28px', borderRadius: 100,
+                    background: '#A5F044', color: '#000',
+                    fontSize: 14, fontWeight: 700, border: 'none',
+                  }}
+                >
+                  + Schedule a Workout
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {todayWorkouts.map(w => (
+                  <WorkoutCard
+                    key={w.id}
+                    workout={w}
+                    onUpdate={updateWorkout}
+                    onDelete={deleteWorkout}
+                    onLog={setLogWorkout}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ══════════════ WORKOUTS TAB ══════════════ */}
+      {!loading && tab === 'workouts' && (
+        <>
+          {/* Priority filter */}
+          <div style={{ padding: '0 16px 10px' }}>
+            <p style={{ color: '#8e8e93', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
+              Priority
+            </p>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+              {PRIORITIES.map(p => chip(
+                p, priorityFilter, PC[p],
+                () => setPriorityFilter(p),
+                p === 'all' ? 'All' : p
+              ))}
+            </div>
+          </div>
+
+          {/* Status filter */}
+          <div style={{ padding: '0 16px 16px' }}>
+            <p style={{ color: '#8e8e93', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
+              Status
+            </p>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+              {STATUSES.map(s => chip(
+                s, statusFilter, SC[s],
+                () => setStatusFilter(s),
+                s === 'all' ? 'All' : s === 'in_progress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)
+              ))}
+            </div>
+          </div>
+
+          {/* Count */}
+          <div style={{ padding: '0 16px', marginBottom: 10 }}>
+            <p style={{ color: '#3a3a3c', fontSize: 13 }}>
+              {filtered.length} workout{filtered.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          {/* List */}
+          <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filtered.length === 0 ? (
+              <div style={{ background: '#1c1c1e', borderRadius: 20, padding: '40px', textAlign: 'center' }}>
+                <p style={{ fontSize: 40, marginBottom: 10 }}>🏋️</p>
+                <p style={{ color: '#636366', fontSize: 14 }}>No workouts match this filter.</p>
+              </div>
+            ) : filtered.map(w => (
+              <WorkoutCard
+                key={w.id}
+                workout={w}
+                onUpdate={updateWorkout}
+                onDelete={deleteWorkout}
+                onLog={setLogWorkout}
+              />
+            ))}
+          </div>
+
+          {/* FAB */}
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={{
+              position: 'fixed', bottom: 76, right: 20, zIndex: 40,
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#A5F044', color: '#000',
+              fontSize: 30, fontWeight: 700, border: 'none',
+              boxShadow: '0 4px 24px rgba(165,240,68,.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            +
+          </button>
+        </>
+      )}
+
+      {/* ══════════════ PROGRESS TAB ══════════════ */}
+      {!loading && tab === 'progress' && (
+        <div style={{ padding: '0 16px' }}>
+          <ProgressTab
+            metrics={metrics}
+            onAdded={m => setMetrics(prev => [...prev, m])}
+          />
+        </div>
+      )}
+
+      {/* ── Bottom nav ───────────────────────────────────────────── */}
+      <Nav active={tab} onChange={setTab} urgentCount={urgentCount} />
+
+      {/* ── Modals ───────────────────────────────────────────────── */}
+      {showAddModal && (
+        <AddWorkoutModal
+          onClose={() => setShowAddModal(false)}
+          onCreated={w => {
+            setWorkouts(prev => [w, ...prev])
+            setShowAddModal(false)
+          }}
+        />
+      )}
+      {logWorkout && (
+        <LogExerciseModal
+          workout={logWorkout}
+          onClose={() => setLogWorkout(null)}
+        />
+      )}
     </div>
   )
 }
